@@ -104,6 +104,16 @@ class GithubAuthorityTests(unittest.TestCase):
         self.assertLess(build, validate); self.assertLess(validate, sign)
         self.assertNotIn("PGK_EXTERNAL_RUN_IMMUTABLE_URL", workflow)
 
+    def test_workflow_requires_immutable_release_and_exact_asset_ids(self):
+        workflow = (HERE / "github-attest-result.template.yml").read_text("utf-8")
+        self.assertIn('test "$(jq -r .immutable <<<"$release_json")" = true', workflow)
+        self.assertIn("PGK_V35_INPUT_ARCHIVE_ASSET_ID", workflow)
+        self.assertIn("PGK_V35_DEPLOYMENT_ARCHIVE_ASSET_ID", workflow)
+        self.assertIn("releases/assets/$INPUT_ASSET_ID", workflow)
+        self.assertIn("releases/assets/$DEPLOYMENT_ASSET_ID", workflow)
+        self.assertNotIn("INPUT_ARCHIVE_IMMUTABLE_URL", workflow)
+        self.assertNotIn("DEPLOYMENT_ARCHIVE_IMMUTABLE_URL", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
