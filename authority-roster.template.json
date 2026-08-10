@@ -1,0 +1,1 @@
+{"authorities":[{"custodian_id":"REPLACE_CUSTODIAN_A","key_id":"REPLACE_AUTHORITY_A","spki_sha256":"REPLACE_64_HEX"},{"custodian_id":"REPLACE_CUSTODIAN_B","key_id":"REPLACE_AUTHORITY_B","spki_sha256":"REPLACE_64_HEX"}],"candidate_generation":"v35","initiative_id":"PGK-FAILCLOSED-001","schema_version":1,"threshold":2}

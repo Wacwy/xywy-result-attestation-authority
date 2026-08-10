@@ -1,0 +1,102 @@
+name: attest
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  attest-result:
+    runs-on: ubuntu-24.04
+    environment: pgk-result-attestation
+    steps:
+      - name: Checkout immutable authority implementation
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Fetch frozen candidate input
+        shell: bash
+        env:
+          INPUT_URL: ${{ vars.PGK_V35_INPUT_ARCHIVE_IMMUTABLE_URL }}
+          INPUT_SHA256: ${{ vars.PGK_V35_INPUT_ARCHIVE_SHA256 }}
+        run: |
+          set -euo pipefail
+          [[ "$INPUT_URL" == https://* ]]
+          [[ "$INPUT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          curl --fail --silent --show-error --location --proto '=https' \
+            --tlsv1.2 --output input.tar "$INPUT_URL"
+          test "$(sha256sum input.tar | cut -d' ' -f1)" = "$INPUT_SHA256"
+          mkdir input && tar --extract --file input.tar --directory input \
+            --no-same-owner --no-same-permissions
+          test -d input/candidate
+          test ! -L input/candidate
+          test -f input/execution-manifest.json
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          root = pathlib.Path("input/candidate")
+          manifest = json.loads(pathlib.Path("input/execution-manifest.json").read_text("ascii"))
+          assert manifest["schema_version"] == 1
+          assert manifest["candidate_generation"] == "v35"
+          expected = manifest["files"]
+          actual = {
+              p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in root.rglob("*")
+              if p.is_file() and p.relative_to(root).as_posix() != "SHA256SUMS.txt"
+          }
+          assert actual == expected
+          PY
+      - name: Fetch independently frozen deployment authority inputs
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ vars.PGK_V35_DEPLOYMENT_ARCHIVE_IMMUTABLE_URL }}
+          DEPLOYMENT_SHA256: ${{ vars.PGK_V35_DEPLOYMENT_ARCHIVE_SHA256 }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOYMENT_URL" == https://* ]]
+          [[ "$DEPLOYMENT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          curl --fail --silent --show-error --location --proto '=https' \
+            --tlsv1.2 --output "$RUNNER_TEMP/deployment.tar" "$DEPLOYMENT_URL"
+          test "$(sha256sum "$RUNNER_TEMP/deployment.tar" | cut -d' ' -f1)" = "$DEPLOYMENT_SHA256"
+          mkdir "$RUNNER_TEMP/deployment"
+          tar --extract --file "$RUNNER_TEMP/deployment.tar" \
+            --directory "$RUNNER_TEMP/deployment" --no-same-owner --no-same-permissions
+      - name: Execute authority-owned runner and construct observed record
+        shell: bash
+        env:
+          PGK_INPUT_ROOT: ${{ github.workspace }}/input
+          PGK_CANDIDATE_DIR: ${{ github.workspace }}/input/candidate
+          PGK_DEPLOYMENT_ROOT: ${{ runner.temp }}/deployment
+        run: |
+          set -euo pipefail
+          python3 github_authority/run_v35_authority.py \
+            --input-root "$PGK_INPUT_ROOT" --evidence-dir "$RUNNER_TEMP/evidence"
+          python3 github_authority/validate_v35_record.py \
+            --record "$RUNNER_TEMP/evidence/external-run.json" \
+            --evidence-dir "$RUNNER_TEMP/evidence" \
+            --manifest "$PGK_INPUT_ROOT/execution-manifest.json"
+          cp "$RUNNER_TEMP/evidence/external-run.json" external-run.json
+          cp -a "$RUNNER_TEMP/evidence" authority-evidence
+      - name: Install pinned Cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+        with:
+          cosign-release: v2.6.1
+      - name: Issue keyless certificate and publish to Rekor
+        shell: bash
+        run: |
+          set -euo pipefail
+          cosign attest-blob --yes --new-bundle-format \
+            --type https://xywy.example/attestation/pgk-result/v1 \
+            --predicate external-run.json \
+            --bundle external-run.sigstore.json external-run.json
+      - name: Upload immutable verification bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pgk-v35-result-attestation
+          path: |
+            external-run.json
+            external-run.sigstore.json
+            authority-evidence/
+          if-no-files-found: error
+          retention-days: 90
