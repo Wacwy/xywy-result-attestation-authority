@@ -111,6 +111,9 @@ class GithubAuthorityTests(unittest.TestCase):
         self.assertIn("PGK_V35_DEPLOYMENT_ARCHIVE_ASSET_ID", workflow)
         self.assertIn("releases/assets/$INPUT_ASSET_ID", workflow)
         self.assertIn("releases/assets/$DEPLOYMENT_ASSET_ID", workflow)
+        self.assertIn(".assets | any(.id == $asset_id", workflow)
+        self.assertIn("python3 safe_extract_tar.py", workflow)
+        self.assertNotIn("tar --extract", workflow)
         self.assertNotIn("INPUT_ARCHIVE_IMMUTABLE_URL", workflow)
         self.assertNotIn("DEPLOYMENT_ARCHIVE_IMMUTABLE_URL", workflow)
 
