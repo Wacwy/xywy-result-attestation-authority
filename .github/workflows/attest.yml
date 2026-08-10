@@ -2,6 +2,11 @@ name: attest
 
 on:
   workflow_dispatch:
+    inputs:
+      input_release_id:
+        description: Exact immutable GitHub release database ID
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -19,14 +24,26 @@ jobs:
       - name: Fetch frozen candidate input
         shell: bash
         env:
-          INPUT_URL: ${{ vars.PGK_V35_INPUT_ARCHIVE_IMMUTABLE_URL }}
+          INPUT_RELEASE_ID: ${{ inputs.input_release_id }}
+          INPUT_RELEASE_TAG: ${{ vars.PGK_V35_INPUT_RELEASE_TAG }}
+          INPUT_ASSET_ID: ${{ vars.PGK_V35_INPUT_ARCHIVE_ASSET_ID }}
           INPUT_SHA256: ${{ vars.PGK_V35_INPUT_ARCHIVE_SHA256 }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          [[ "$INPUT_URL" == https://* ]]
+          [[ "$INPUT_RELEASE_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$INPUT_ASSET_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$INPUT_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          curl --fail --silent --show-error --location --proto '=https' \
-            --tlsv1.2 --output input.tar "$INPUT_URL"
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/$INPUT_RELEASE_ID")"
+          test "$(jq -r .tag_name <<<"$release_json")" = "$INPUT_RELEASE_TAG"
+          test "$(jq -r .immutable <<<"$release_json")" = true
+          test "$(jq -r .draft <<<"$release_json")" = false
+          asset_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/assets/$INPUT_ASSET_ID")"
+          test "$(jq -r .name <<<"$asset_json")" = pgk-v35-candidate-input.tar
+          test "$(jq -r .url <<<"$asset_json")" = \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$INPUT_ASSET_ID"
+          gh api -H 'Accept: application/octet-stream' \
+            "repos/$GITHUB_REPOSITORY/releases/assets/$INPUT_ASSET_ID" > input.tar
           test "$(sha256sum input.tar | cut -d' ' -f1)" = "$INPUT_SHA256"
           mkdir input && tar --extract --file input.tar --directory input \
             --no-same-owner --no-same-permissions
@@ -50,14 +67,24 @@ jobs:
       - name: Fetch independently frozen deployment authority inputs
         shell: bash
         env:
-          DEPLOYMENT_URL: ${{ vars.PGK_V35_DEPLOYMENT_ARCHIVE_IMMUTABLE_URL }}
+          INPUT_RELEASE_ID: ${{ inputs.input_release_id }}
+          DEPLOYMENT_ASSET_ID: ${{ vars.PGK_V35_DEPLOYMENT_ARCHIVE_ASSET_ID }}
           DEPLOYMENT_SHA256: ${{ vars.PGK_V35_DEPLOYMENT_ARCHIVE_SHA256 }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          [[ "$DEPLOYMENT_URL" == https://* ]]
+          [[ "$INPUT_RELEASE_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$DEPLOYMENT_ASSET_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$DEPLOYMENT_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          curl --fail --silent --show-error --location --proto '=https' \
-            --tlsv1.2 --output "$RUNNER_TEMP/deployment.tar" "$DEPLOYMENT_URL"
+          asset_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/assets/$DEPLOYMENT_ASSET_ID")"
+          test "$(jq -r .name <<<"$asset_json")" = pgk-v35-deployment-input.tar
+          test "$(jq -r .url <<<"$asset_json")" = \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$DEPLOYMENT_ASSET_ID"
+          test "$(jq -r .id <<<"$asset_json")" = "$DEPLOYMENT_ASSET_ID"
+          test "$(jq -r .url <<<"$asset_json" | grep -F "/repos/$GITHUB_REPOSITORY/releases/assets/")"
+          gh api -H 'Accept: application/octet-stream' \
+            "repos/$GITHUB_REPOSITORY/releases/assets/$DEPLOYMENT_ASSET_ID" \
+            > "$RUNNER_TEMP/deployment.tar"
           test "$(sha256sum "$RUNNER_TEMP/deployment.tar" | cut -d' ' -f1)" = "$DEPLOYMENT_SHA256"
           mkdir "$RUNNER_TEMP/deployment"
           tar --extract --file "$RUNNER_TEMP/deployment.tar" \
