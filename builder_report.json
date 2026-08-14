@@ -1,20 +1,16 @@
 {
-  "schema_version": 1,
-  "initiative_id": "PGK-FAILCLOSED-001",
-  "candidate": "v35",
-  "status": "BUILT_NOT_APPROVED",
-  "official_pass": false,
-  "promotion_allowed": false,
-  "goal_complete": false,
-  "tests": "70/70 PASS",
-  "repaired": [
-    "candidate SHA256SUMS identity and execution-manifest transport identity are separate authenticated fields",
-    "authority runner computes execution_manifest_sha256 from canonical observed bytes and requires its file map to equal the candidate manifest",
-    "closed record schema and verifier independently bind both representation digests",
-    "negative test rejects a recomputed record carrying a substituted execution-manifest digest",
-    "deployment authority inputs are fetched under a separate immutable digest and must resolve outside the candidate input root"
-  ],
-  "authority_constructor": "IMPLEMENTED_NOT_EXTERNALLY_PROVISIONED",
-  "external_e2e": "FAIL_NOT_RUN",
-  "blind_review_required": true
+    "schema_version":  2,
+    "initiative_id":  "PGK-FAILCLOSED-001",
+    "candidate":  "v35-single-tuf-publisher",
+    "commit":  "e7eb18cbb856bb0fdc43d6e0be109c56e3b1de14",
+    "status":  "BUILT_HOSTILE_CODE_REVIEW_APPROVED_NOT_MERGED",
+    "official_pass":  false,
+    "promotion_allowed":  false,
+    "goal_complete":  false,
+    "tests":  "85/85 PASS",
+    "hostile_review":  "CODE_APPROVE",
+    "scope":  "TUF root and targets exact 1-of-1 same publication custodian; authority roster remains exact 2-of-2 result authorities; checkpoint quorum remains two distinct services",
+    "external_e2e":  "FAIL_NOT_RUN",
+    "tuf_pins":  "UNPROVISIONED",
+    "blind_review_required":  true
 }
