@@ -10,7 +10,7 @@ class TufRosterTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory(); self.root=Path(self.tmp.name)
         self.private={k:ed25519.Ed25519PrivateKey.generate() for k in ('custodian-a',)}
         self.keys={k:{'keytype':'ed25519','scheme':'ed25519','keyval':{'public':base64.b64encode(v.public_key().public_bytes_raw()).decode()}} for k,v in self.private.items()}
-        self.roster={'schema_version':1,'initiative_id':'PGK-FAILCLOSED-001','candidate_generation':'v35','threshold':1,'authorities':[{'key_id':'authority-a','spki_sha256':'1'*64,'custodian_id':'custodian-a'}]}
+        self.roster={'schema_version':1,'initiative_id':'PGK-FAILCLOSED-001','candidate_generation':'v35','threshold':2,'authorities':[{'key_id':'authority-a','spki_sha256':'1'*64,'custodian_id':'authority-custodian-a'},{'key_id':'authority-b','spki_sha256':'2'*64,'custodian_id':'authority-custodian-b'}]}
         self.write('roster.json',self.roster)
         roster_raw=tr.canonical(self.roster)
         self.targets_signed={'_type':'targets','expires':'2030-01-01T00:00:00Z','spec_version':'1.0.31','targets':{'authority-roster.json':{'hashes':{'sha256':hashlib.sha256(roster_raw).hexdigest()},'length':len(roster_raw)}},'version':1}
@@ -26,7 +26,7 @@ class TufRosterTests(unittest.TestCase):
         self.digest=hashlib.sha256((self.root/'root.json').read_bytes()).hexdigest()
     def verify(self): return tr.verify_roster(root_path=self.root/'root.json',targets_path=self.root/'targets.json',roster_path=self.root/'roster.json',trusted_root_sha256=self.digest,trusted_targets_sha256=hashlib.sha256((self.root/'targets.json').read_bytes()).hexdigest())
     def test_one_of_one_accepts(self):
-        result=self.verify(); self.assertTrue(result['verified']); self.assertEqual(result['threshold'],1); self.assertEqual(result['custodian_count'],1)
+        result=self.verify(); self.assertTrue(result['verified']); self.assertEqual(result['threshold'],2); self.assertEqual(result['custodian_count'],2)
     def test_unprovisioned_fails_closed(self):
         with self.assertRaisesRegex(ValueError,'not provisioned'): tr.verify_roster(root_path=self.root/'root.json',targets_path=self.root/'targets.json',roster_path=self.root/'roster.json')
     def test_missing_root_signature_rejected(self):
@@ -43,9 +43,8 @@ class TufRosterTests(unittest.TestCase):
         self.root_signed['roles']['root']={'keyids':['custodian-a','custodian-b'],'threshold':1}
         self.emit(root_keys=('custodian-a',))
         with self.assertRaisesRegex(ValueError,'exact 1-of-1'): self.verify()
-    def test_two_authority_roster_rejected_even_at_threshold_one(self):
-        bad=copy.deepcopy(self.roster)
-        bad['authorities'].append({'key_id':'authority-b','spki_sha256':'2'*64,'custodian_id':'custodian-b'})
+    def test_one_authority_roster_rejected_even_with_single_publisher(self):
+        bad=copy.deepcopy(self.roster); bad['threshold']=1; bad['authorities']=bad['authorities'][:1]
         raw=tr.canonical(bad); self.write('roster.json',bad)
         self.targets_signed['targets']['authority-roster.json']={'hashes':{'sha256':hashlib.sha256(raw).hexdigest()},'length':len(raw)}; self.emit()
         with self.assertRaisesRegex(ValueError,'roster scope'): self.verify()
@@ -62,8 +61,8 @@ class TufRosterTests(unittest.TestCase):
     def test_changed_roster_rejected(self):
         changed=copy.deepcopy(self.roster); changed['authorities'][0]['spki_sha256']='a'*64; self.write('roster.json',changed)
         with self.assertRaisesRegex(ValueError,'target mismatch'): self.verify()
-    def test_second_authority_rejected(self):
-        bad=copy.deepcopy(self.roster); bad['authorities'].append({'key_id':'authority-b','spki_sha256':'2'*64,'custodian_id':'custodian-b'}); raw=tr.canonical(bad); self.write('roster.json',bad)
+    def test_same_authority_custodian_rejected(self):
+        bad=copy.deepcopy(self.roster); bad['authorities'][1]['custodian_id']='authority-custodian-a'; raw=tr.canonical(bad); self.write('roster.json',bad)
         self.targets_signed['targets']['authority-roster.json']={'hashes':{'sha256':hashlib.sha256(raw).hexdigest()},'length':len(raw)}; self.emit()
-        with self.assertRaisesRegex(ValueError,'roster scope'): self.verify()
+        with self.assertRaisesRegex(ValueError,'distinct authority custodians'): self.verify()
 if __name__=='__main__': unittest.main()
