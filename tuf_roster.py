@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Strict offline verifier for an externally provisioned 2-of-2 TUF roster.
+"""Strict offline verifier for an externally provisioned single-custodian TUF roster.
 
 This module intentionally creates no keys and trusts no caller-provided root
 digest. A production generation must replace TRUSTED_TUF_ROOT_SHA256 with the
-digest of root.json after two genuinely independent custodians publish it.
+digest of root.json after the configured custodian publishes it.
 """
 from __future__ import annotations
 
@@ -123,10 +123,10 @@ def verify_roster(*, root_path: Path, targets_path: Path,
     for name in ("root", "targets"):
         role = roles[name]
         if (not isinstance(role, dict) or set(role) != {"keyids", "threshold"}
-                or role["threshold"] != 2 or len(role["keyids"]) != 2
-                or len(set(role["keyids"])) != 2
+                or role["threshold"] != 1 or len(role["keyids"]) != 1
+                or len(set(role["keyids"])) != 1
                 or any(keyid not in keys for keyid in role["keyids"])):
-            raise ValueError(f"TUF {name} must be exact 2-of-2")
+            raise ValueError(f"TUF {name} must be exact 1-of-1")
     _verify_envelope(root, keys, roles["root"])
 
     targets, targets_raw = load_canonical(targets_path)
@@ -155,9 +155,9 @@ def verify_roster(*, root_path: Path, targets_path: Path,
             or roster["schema_version"] != 1
             or roster["initiative_id"] != "PGK-FAILCLOSED-001"
             or roster["candidate_generation"] != "v35"
-            or roster["threshold"] != 2
+            or roster["threshold"] != 1
             or not isinstance(roster["authorities"], list)
-            or len(roster["authorities"]) != 2):
+            or len(roster["authorities"]) != 1):
         raise ValueError("authority roster scope")
     custodians, authority_keys = set(), set()
     for authority in roster["authorities"]:
@@ -169,13 +169,13 @@ def verify_roster(*, root_path: Path, targets_path: Path,
             raise ValueError("authority roster member")
         custodians.add(authority["custodian_id"])
         authority_keys.add(authority["spki_sha256"])
-    if len(custodians) != 2 or len(authority_keys) != 2:
-        raise ValueError("roster requires distinct custodian identities and keys")
+    if len(custodians) != 1 or len(authority_keys) != 1:
+        raise ValueError("roster requires exactly one custodian identity and key")
     normalized_authorities = sorted(
         ({"key_id": item["key_id"], "custodian_id": item["custodian_id"],
           "spki_sha256": item["spki_sha256"]} for item in roster["authorities"]),
         key=lambda item: item["key_id"])
     return {"verified": True, "root_sha256": trusted_root_sha256,
             "targets_sha256": _sha(targets_raw), "roster_sha256": _sha(roster_raw),
-            "threshold": 2, "custodian_count": 2,
+            "threshold": 1, "custodian_count": 1,
             "authorities": normalized_authorities}
