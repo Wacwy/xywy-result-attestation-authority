@@ -43,6 +43,14 @@ class TufRosterTests(unittest.TestCase):
         self.root_signed['roles']['root']={'keyids':['custodian-a','custodian-b'],'threshold':1}
         self.emit(root_keys=('custodian-a',))
         with self.assertRaisesRegex(ValueError,'exact 1-of-1'): self.verify()
+    def test_different_single_keys_for_root_and_targets_rejected(self):
+        other=ed25519.Ed25519PrivateKey.generate()
+        self.private['custodian-b']=other
+        self.keys['custodian-b']={'keytype':'ed25519','scheme':'ed25519','keyval':{'public':base64.b64encode(other.public_key().public_bytes_raw()).decode()}}
+        self.root_signed['keys']=self.keys
+        self.root_signed['roles']['targets']={'keyids':['custodian-b'],'threshold':1}
+        self.emit(root_keys=('custodian-a',),target_keys=('custodian-b',))
+        with self.assertRaisesRegex(ValueError,'same sole custodian key'): self.verify()
     def test_one_authority_roster_rejected_even_with_single_publisher(self):
         bad=copy.deepcopy(self.roster); bad['threshold']=1; bad['authorities']=bad['authorities'][:1]
         raw=tr.canonical(bad); self.write('roster.json',bad)

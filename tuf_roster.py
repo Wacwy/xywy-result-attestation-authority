@@ -127,6 +127,8 @@ def verify_roster(*, root_path: Path, targets_path: Path,
                 or len(set(role["keyids"])) != 1
                 or any(keyid not in keys for keyid in role["keyids"])):
             raise ValueError(f"TUF {name} must be exact 1-of-1")
+    if roles["root"]["keyids"] != roles["targets"]["keyids"]:
+        raise ValueError("TUF root and targets must use the same sole custodian key")
     _verify_envelope(root, keys, roles["root"])
 
     targets, targets_raw = load_canonical(targets_path)
