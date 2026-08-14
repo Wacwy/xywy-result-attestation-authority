@@ -14,7 +14,7 @@ Acceptance requires all of the following:
 2. strict authorization, nonce receipt, monotonic checkpoint and distinct-service semantics;
 3. exact stdout, stderr, result artifact, snapshot map and entrypoint bytes;
 4. policy-pinned Cosign verification of exact GitHub OIDC workflow/ref/commit;
-5. Rekor transparency verification and a matching externally pinned 1-of-1 TUF roster.
+5. Rekor transparency verification and a two-authority roster published by an externally pinned 1-of-1 TUF custodian.
 
 v35 gives the two manifest representations distinct, closed identities instead
 of overloading one field. `manifest_sha256` and
@@ -36,7 +36,8 @@ until real independent operators freeze them. No local fallback exists.
 `tuf_roster.py` additionally verifies digest-pinned canonical TUF root **and
 targets** metadata with exact 1-of-1 Ed25519 root/targets roles and live
 expirations, then validates
-the exact single-custodian roster target and authority key.
+the exact roster target containing two distinct result authorities. The TUF
+publication custodian is not the result-authorization threshold.
 It does not generate keys or signatures. `tuf-root.template.json` and
 `authority-roster.template.json` are non-authoritative hand-off templates.
 
@@ -66,9 +67,9 @@ with internally consistent hashes, is therefore insufficient.
 
 ## Operator order
 
-1. One designated custodian generates and retains one Ed25519 TUF key and
+1. One designated publication custodian generates and retains one Ed25519 TUF key and
    publishes only its public key.
-2. That custodian reviews the roster, creates `targets.json`, and signs the canonical
+2. That custodian reviews the two-authority roster, creates `targets.json`, and signs the canonical
    root and targets `signed` objects. Publish root/targets/roster to storage the
    builder cannot rewrite; independently anchor both metadata digests and their
    generation. A monotonic external clock/anchor remains mandatory because a
@@ -81,14 +82,15 @@ with internally consistent hashes, is therefore insufficient.
 5. A fresh hostile reviewer executes whole-root replacement, missing-signature,
    rollback, split-view, replay, concurrency and crash/recovery controls.
 
-This requested 1-of-1 policy is an explicit security downgrade: compromise or
-loss of the sole custodian key can authorize or halt roster publication. It no
-longer claims Byzantine separation between independent TUF custodians. The
-checked-in positive TUF test is only a cryptographic fixture.
+This requested 1-of-1 TUF publication policy is an explicit security downgrade:
+compromise or loss of the sole publication key can replace or halt roster
+publication. It does not reduce the separately enforced 2-of-2 result
+authorization or the two checkpoint-service identities. The checked-in
+positive TUF test is only a cryptographic fixture.
 
 ## Remaining fail-closed state
 
-The single-custodian authority roster, two checkpoint services, nonce ledger and
+The single TUF publication custodian, two result authorities, two checkpoint services, nonce ledger and
 monotonic anchor remain `UNPROVISIONED_*`. The same Windows administrator
 cannot legitimately instantiate the independent checkpoint services. Consequently
 this candidate is **not a PASS**, does not authorize promotion, and does not
