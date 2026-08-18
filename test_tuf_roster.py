@@ -93,6 +93,11 @@ class TufRosterTests(unittest.TestCase):
     def test_expired_targets_rejected(self):
         self.targets_signed['expires']='2020-01-01T00:00:00Z'; self.emit()
         with self.assertRaisesRegex(ValueError,'expired'): self.verify()
+    def test_malformed_or_nonpositive_targets_versions_rejected(self):
+        for value in (True, 0, -1, 'one', None, []):
+            with self.subTest(value=value):
+                self.targets_signed['version']=value; self.emit()
+                with self.assertRaisesRegex(ValueError,'targets scope'): self.verify()
     def test_changed_roster_rejected(self):
         changed=copy.deepcopy(self.roster); changed['authorities'][0]['spki_sha256']='a'*64; self.write('roster.json',changed)
         with self.assertRaisesRegex(ValueError,'target mismatch'): self.verify()
