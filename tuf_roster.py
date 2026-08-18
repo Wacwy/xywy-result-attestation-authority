@@ -28,14 +28,20 @@ def canonical(value: object) -> bytes:
                        separators=(",", ":")) + "\n").encode("ascii")
 
 
-def load_canonical(path: Path) -> tuple[dict, bytes]:
-    raw = path.resolve(strict=True).read_bytes()
+def parse_canonical(raw: bytes) -> dict:
+    """Parse canonical JSON from an already authenticated byte buffer."""
     try:
         value = json.loads(raw.decode("ascii"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("non-canonical TUF metadata") from exc
     if not isinstance(value, dict) or raw != canonical(value):
         raise ValueError("non-canonical TUF metadata")
+    return value
+
+
+def load_canonical(path: Path) -> tuple[dict, bytes]:
+    raw = path.resolve(strict=True).read_bytes()
+    value = parse_canonical(raw)
     return value, raw
 
 
@@ -176,7 +182,9 @@ def verify_roster(*, root_path: Path, targets_path: Path,
     roster_raw = roster_path.resolve(strict=True).read_bytes()
     if len(roster_raw) != target["length"] or _sha(roster_raw) != target["hashes"]["sha256"]:
         raise ValueError("TUF roster target mismatch")
-    roster, _ = load_canonical(roster_path)
+    # Parse the exact buffer whose length and digest were authenticated above.
+    # Reopening roster_path here would create a check/use race on mutable media.
+    roster = parse_canonical(roster_raw)
     if (set(roster) != {"schema_version", "initiative_id", "candidate_generation",
                         "threshold", "authorities"}
             or type(roster["schema_version"]) is not int
