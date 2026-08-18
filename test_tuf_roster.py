@@ -43,6 +43,13 @@ class TufRosterTests(unittest.TestCase):
         self.root_signed['roles']['root']={'keyids':['custodian-a','custodian-b'],'threshold':1}
         self.emit(root_keys=('custodian-a',))
         with self.assertRaisesRegex(ValueError,'exact 1-of-1'): self.verify()
+    def test_unused_extra_root_key_rejected(self):
+        other=ed25519.Ed25519PrivateKey.generate()
+        self.private['custodian-b']=other
+        self.keys['custodian-b']={'keytype':'ed25519','scheme':'ed25519','keyval':{'public':base64.b64encode(other.public_key().public_bytes_raw()).decode()}}
+        self.root_signed['keys']=self.keys
+        self.emit(root_keys=('custodian-a',))
+        with self.assertRaisesRegex(ValueError,'exactly the sole custodian key'): self.verify()
     def test_different_single_keys_for_root_and_targets_rejected(self):
         other=ed25519.Ed25519PrivateKey.generate()
         self.private['custodian-b']=other

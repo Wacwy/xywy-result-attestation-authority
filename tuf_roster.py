@@ -107,7 +107,9 @@ def verify_roster(*, root_path: Path, targets_path: Path,
         raise ValueError("TUF root scope")
     _require_live_expiry(signed["expires"], now)
     keys, roles = signed["keys"], signed["roles"]
-    if set(roles) != {"root", "targets"}:
+    if not isinstance(keys, dict):
+        raise ValueError("TUF keys")
+    if not isinstance(roles, dict) or set(roles) != {"root", "targets"}:
         raise ValueError("TUF roles")
     for keyid, key in keys.items():
         if (not KEY_ID.fullmatch(keyid) or not isinstance(key, dict)
@@ -129,6 +131,9 @@ def verify_roster(*, root_path: Path, targets_path: Path,
             raise ValueError(f"TUF {name} must be exact 1-of-1")
     if roles["root"]["keyids"] != roles["targets"]["keyids"]:
         raise ValueError("TUF root and targets must use the same sole custodian key")
+    sole_custodian_key = roles["root"]["keyids"][0]
+    if set(keys) != {sole_custodian_key}:
+        raise ValueError("TUF root must contain exactly the sole custodian key")
     _verify_envelope(root, keys, roles["root"])
 
     targets, targets_raw = load_canonical(targets_path)
