@@ -188,7 +188,7 @@ def verify_roster(*, root_path: Path, targets_path: Path,
             or not isinstance(roster["authorities"], list)
             or len(roster["authorities"]) != 2):
         raise ValueError("authority roster scope")
-    custodians, authority_keys = set(), set()
+    custodians, authority_key_ids, authority_keys = set(), set(), set()
     for authority in roster["authorities"]:
         if (not isinstance(authority, dict)
                 or set(authority) != {"key_id", "spki_sha256", "custodian_id"}
@@ -200,9 +200,12 @@ def verify_roster(*, root_path: Path, targets_path: Path,
                 or not KEY_ID.fullmatch(authority["custodian_id"])):
             raise ValueError("authority roster member")
         custodians.add(authority["custodian_id"])
+        authority_key_ids.add(authority["key_id"])
         authority_keys.add(authority["spki_sha256"])
-    if len(custodians) != 2 or len(authority_keys) != 2:
-        raise ValueError("roster requires two distinct authority custodians and keys")
+    if (len(custodians) != 2 or len(authority_key_ids) != 2
+            or len(authority_keys) != 2):
+        raise ValueError(
+            "roster requires two distinct authority custodians, key IDs, and keys")
     normalized_authorities = sorted(
         ({"key_id": item["key_id"], "custodian_id": item["custodian_id"],
           "spki_sha256": item["spki_sha256"]} for item in roster["authorities"]),
