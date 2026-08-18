@@ -25,6 +25,9 @@ class TufRosterTests(unittest.TestCase):
         self.write('root.json',self.sign(self.root_signed,root_keys)); self.write('targets.json',self.sign(self.targets_signed,target_keys))
         self.digest=hashlib.sha256((self.root/'root.json').read_bytes()).hexdigest()
     def verify(self): return tr.verify_roster(root_path=self.root/'root.json',targets_path=self.root/'targets.json',roster_path=self.root/'roster.json',trusted_root_sha256=self.digest,trusted_targets_sha256=hashlib.sha256((self.root/'targets.json').read_bytes()).hexdigest())
+    def publish_roster(self, roster):
+        raw=tr.canonical(roster); self.write('roster.json',roster)
+        self.targets_signed['targets']['authority-roster.json']={'hashes':{'sha256':hashlib.sha256(raw).hexdigest()},'length':len(raw)}; self.emit()
     def test_one_of_one_accepts(self):
         result=self.verify(); self.assertTrue(result['verified']); self.assertEqual(result['threshold'],2); self.assertEqual(result['custodian_count'],2)
     def test_unprovisioned_fails_closed(self):
@@ -105,4 +108,28 @@ class TufRosterTests(unittest.TestCase):
         bad=copy.deepcopy(self.roster); bad['authorities'][1]['custodian_id']='authority-custodian-a'; raw=tr.canonical(bad); self.write('roster.json',bad)
         self.targets_signed['targets']['authority-roster.json']={'hashes':{'sha256':hashlib.sha256(raw).hexdigest()},'length':len(raw)}; self.emit()
         with self.assertRaisesRegex(ValueError,'distinct authority custodians'): self.verify()
+    def test_roster_boolean_and_float_schema_numbers_rejected(self):
+        for field, values in (('schema_version', (True, 1.0)),
+                              ('threshold', (True, 2.0))):
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    bad=copy.deepcopy(self.roster); bad[field]=value
+                    self.publish_roster(bad)
+                    with self.assertRaisesRegex(ValueError,'roster scope'): self.verify()
+    def test_non_string_authority_identity_fields_rejected_as_value_error(self):
+        for field in ('key_id', 'spki_sha256', 'custodian_id'):
+            for value in (None, True, 1.0, [], {}):
+                with self.subTest(field=field, value=value):
+                    bad=copy.deepcopy(self.roster); bad['authorities'][0][field]=value
+                    self.publish_roster(bad)
+                    with self.assertRaisesRegex(ValueError,'roster member'): self.verify()
+    def test_malformed_targets_map_and_hashes_rejected_as_value_error(self):
+        for value in (None, [], 'not-an-object'):
+            with self.subTest(targets=value):
+                self.targets_signed['targets']=value; self.emit()
+                with self.assertRaisesRegex(ValueError,'targets map'): self.verify()
+        for value in (None, [], 'not-an-object'):
+            with self.subTest(hashes=value):
+                self.targets_signed['targets']={'authority-roster.json':{'hashes':value,'length':len(tr.canonical(self.roster))}}; self.emit()
+                with self.assertRaisesRegex(ValueError,'roster target'): self.verify()
 if __name__=='__main__': unittest.main()
