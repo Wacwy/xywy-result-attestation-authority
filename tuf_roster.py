@@ -112,10 +112,13 @@ def verify_roster(*, root_path: Path, targets_path: Path,
     if not isinstance(roles, dict) or set(roles) != {"root", "targets"}:
         raise ValueError("TUF roles")
     for keyid, key in keys.items():
-        if (not KEY_ID.fullmatch(keyid) or not isinstance(key, dict)
+        if (not isinstance(keyid, str) or not KEY_ID.fullmatch(keyid)
+                or not isinstance(key, dict)
                 or set(key) != {"keytype", "scheme", "keyval"}
                 or key["keytype"] != "ed25519" or key["scheme"] != "ed25519"
-                or set(key["keyval"]) != {"public"}):
+                or not isinstance(key["keyval"], dict)
+                or set(key["keyval"]) != {"public"}
+                or not isinstance(key["keyval"]["public"], str)):
             raise ValueError("TUF key")
         try:
             if len(base64.b64decode(key["keyval"]["public"], validate=True)) != 32:
@@ -125,7 +128,14 @@ def verify_roster(*, root_path: Path, targets_path: Path,
     for name in ("root", "targets"):
         role = roles[name]
         if (not isinstance(role, dict) or set(role) != {"keyids", "threshold"}
-                or role["threshold"] != 1 or len(role["keyids"]) != 1
+                or not isinstance(role["keyids"], list)
+                or len(role["keyids"]) != 1
+                or any(not isinstance(keyid, str)
+                       or not KEY_ID.fullmatch(keyid)
+                       for keyid in role["keyids"])
+                or not isinstance(role["threshold"], int)
+                or isinstance(role["threshold"], bool)
+                or role["threshold"] != 1
                 or len(set(role["keyids"])) != 1
                 or any(keyid not in keys for keyid in role["keyids"])):
             raise ValueError(f"TUF {name} must be exact 1-of-1")

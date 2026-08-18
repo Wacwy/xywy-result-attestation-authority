@@ -43,6 +43,26 @@ class TufRosterTests(unittest.TestCase):
         self.root_signed['roles']['root']={'keyids':['custodian-a','custodian-b'],'threshold':1}
         self.emit(root_keys=('custodian-a',))
         with self.assertRaisesRegex(ValueError,'exact 1-of-1'): self.verify()
+    def test_string_role_keyids_rejected(self):
+        self.private['a']=self.private.pop('custodian-a')
+        self.keys={'a':self.keys.pop('custodian-a')}
+        self.root_signed['keys']=self.keys
+        self.root_signed['roles']['root']={'keyids':'a','threshold':1}
+        self.root_signed['roles']['targets']={'keyids':'a','threshold':1}
+        self.emit(root_keys=('a',),target_keys=('a',))
+        with self.assertRaisesRegex(ValueError,'exact 1-of-1'): self.verify()
+    def test_boolean_role_threshold_rejected(self):
+        self.root_signed['roles']['root']['threshold']=True
+        self.emit()
+        with self.assertRaisesRegex(ValueError,'exact 1-of-1'): self.verify()
+    def test_non_string_role_keyid_rejected_as_value_error(self):
+        self.root_signed['roles']['root']['keyids']=[None]
+        self.emit()
+        with self.assertRaisesRegex(ValueError,'exact 1-of-1'): self.verify()
+    def test_non_object_keyval_rejected_as_value_error(self):
+        self.root_signed['keys']['custodian-a']['keyval']='not-an-object'
+        self.emit()
+        with self.assertRaisesRegex(ValueError,'TUF key'): self.verify()
     def test_unused_extra_root_key_rejected(self):
         other=ed25519.Ed25519PrivateKey.generate()
         self.private['custodian-b']=other
