@@ -153,7 +153,10 @@ def verify_roster(*, root_path: Path, targets_path: Path,
     if set(targets_signed) != {"_type", "expires", "spec_version", "targets", "version"}:
         raise ValueError("TUF targets fields")
     if (targets_signed["_type"] != "targets"
-            or targets_signed["spec_version"] != "1.0.31"):
+            or targets_signed["spec_version"] != "1.0.31"
+            or not isinstance(targets_signed["version"], int)
+            or isinstance(targets_signed["version"], bool)
+            or targets_signed["version"] < 1):
         raise ValueError("TUF targets scope")
     _require_live_expiry(targets_signed["expires"], now)
     target = targets_signed["targets"].get("authority-roster.json")
