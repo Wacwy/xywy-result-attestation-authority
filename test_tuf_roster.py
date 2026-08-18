@@ -108,6 +108,10 @@ class TufRosterTests(unittest.TestCase):
         bad=copy.deepcopy(self.roster); bad['authorities'][1]['custodian_id']='authority-custodian-a'; raw=tr.canonical(bad); self.write('roster.json',bad)
         self.targets_signed['targets']['authority-roster.json']={'hashes':{'sha256':hashlib.sha256(raw).hexdigest()},'length':len(raw)}; self.emit()
         with self.assertRaisesRegex(ValueError,'distinct authority custodians'): self.verify()
+    def test_same_authority_key_id_rejected(self):
+        bad=copy.deepcopy(self.roster); bad['authorities'][1]['key_id']='authority-a'
+        self.publish_roster(bad)
+        with self.assertRaisesRegex(ValueError,'distinct authority custodians, key IDs, and keys'): self.verify()
     def test_roster_boolean_and_float_schema_numbers_rejected(self):
         for field, values in (('schema_version', (True, 1.0)),
                               ('threshold', (True, 2.0))):
