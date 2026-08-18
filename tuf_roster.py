@@ -86,7 +86,9 @@ def verify_roster(*, root_path: Path, targets_path: Path,
                   roster_path: Path, trusted_root_sha256: str =
                   TRUSTED_TUF_ROOT_SHA256, trusted_targets_sha256: str =
                   TRUSTED_TUF_TARGETS_SHA256, now: datetime | None = None) -> dict:
-    if (not HEX64.fullmatch(trusted_root_sha256)
+    if (not isinstance(trusted_root_sha256, str)
+            or not isinstance(trusted_targets_sha256, str)
+            or not HEX64.fullmatch(trusted_root_sha256)
             or not HEX64.fullmatch(trusted_targets_sha256)):
         raise ValueError("external TUF root/targets are not provisioned")
     if now is None:
@@ -159,9 +161,14 @@ def verify_roster(*, root_path: Path, targets_path: Path,
             or targets_signed["version"] < 1):
         raise ValueError("TUF targets scope")
     _require_live_expiry(targets_signed["expires"], now)
-    target = targets_signed["targets"].get("authority-roster.json")
+    targets_map = targets_signed["targets"]
+    if not isinstance(targets_map, dict):
+        raise ValueError("TUF targets map")
+    target = targets_map.get("authority-roster.json")
     if (not isinstance(target, dict) or set(target) != {"hashes", "length"}
+            or not isinstance(target["hashes"], dict)
             or set(target["hashes"]) != {"sha256"}
+            or not isinstance(target["hashes"]["sha256"], str)
             or not HEX64.fullmatch(target["hashes"]["sha256"])
             or not isinstance(target["length"], int)
             or isinstance(target["length"], bool) or target["length"] < 0):
@@ -172,9 +179,11 @@ def verify_roster(*, root_path: Path, targets_path: Path,
     roster, _ = load_canonical(roster_path)
     if (set(roster) != {"schema_version", "initiative_id", "candidate_generation",
                         "threshold", "authorities"}
+            or type(roster["schema_version"]) is not int
             or roster["schema_version"] != 1
             or roster["initiative_id"] != "PGK-FAILCLOSED-001"
             or roster["candidate_generation"] != "v35"
+            or type(roster["threshold"]) is not int
             or roster["threshold"] != 2
             or not isinstance(roster["authorities"], list)
             or len(roster["authorities"]) != 2):
@@ -183,8 +192,11 @@ def verify_roster(*, root_path: Path, targets_path: Path,
     for authority in roster["authorities"]:
         if (not isinstance(authority, dict)
                 or set(authority) != {"key_id", "spki_sha256", "custodian_id"}
+                or not isinstance(authority["key_id"], str)
                 or not KEY_ID.fullmatch(authority["key_id"])
+                or not isinstance(authority["spki_sha256"], str)
                 or not HEX64.fullmatch(authority["spki_sha256"])
+                or not isinstance(authority["custodian_id"], str)
                 or not KEY_ID.fullmatch(authority["custodian_id"])):
             raise ValueError("authority roster member")
         custodians.add(authority["custodian_id"])
