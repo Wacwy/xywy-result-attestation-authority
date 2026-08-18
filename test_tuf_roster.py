@@ -2,6 +2,7 @@
 from __future__ import annotations
 import base64, copy, hashlib, tempfile, unittest
 from pathlib import Path
+from unittest import mock
 from cryptography.hazmat.primitives.asymmetric import ed25519
 import tuf_roster as tr
 
@@ -104,6 +105,26 @@ class TufRosterTests(unittest.TestCase):
     def test_changed_roster_rejected(self):
         changed=copy.deepcopy(self.roster); changed['authorities'][0]['spki_sha256']='a'*64; self.write('roster.json',changed)
         with self.assertRaisesRegex(ValueError,'target mismatch'): self.verify()
+    def test_roster_is_read_once_and_authenticated_bytes_are_parsed(self):
+        good_raw=(self.root/'roster.json').read_bytes()
+        attacker=copy.deepcopy(self.roster)
+        attacker['authorities'][0]={'key_id':'attacker-a','spki_sha256':'a'*64,'custodian_id':'attacker-custodian-a'}
+        attacker['authorities'][1]={'key_id':'attacker-b','spki_sha256':'b'*64,'custodian_id':'attacker-custodian-b'}
+        attacker_raw=tr.canonical(attacker)
+        roster_path=(self.root/'roster.json').resolve()
+        original_read_bytes=Path.read_bytes
+        reads=0
+        def swapping_read(path):
+            nonlocal reads
+            if path.resolve() == roster_path:
+                reads += 1
+                return good_raw if reads == 1 else attacker_raw
+            return original_read_bytes(path)
+        with mock.patch.object(Path,'read_bytes',swapping_read):
+            result=self.verify()
+        self.assertEqual(reads,1)
+        self.assertEqual(result['roster_sha256'],hashlib.sha256(good_raw).hexdigest())
+        self.assertEqual(result['authorities'],sorted(self.roster['authorities'],key=lambda item:item['key_id']))
     def test_same_authority_custodian_rejected(self):
         bad=copy.deepcopy(self.roster); bad['authorities'][1]['custodian_id']='authority-custodian-a'; raw=tr.canonical(bad); self.write('roster.json',bad)
         self.targets_signed['targets']['authority-roster.json']={'hashes':{'sha256':hashlib.sha256(raw).hexdigest()},'length':len(raw)}; self.emit()
