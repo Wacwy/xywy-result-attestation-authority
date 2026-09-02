@@ -14,7 +14,7 @@ Acceptance requires all of the following:
 2. strict authorization, nonce receipt, monotonic checkpoint and distinct-service semantics;
 3. exact stdout, stderr, result artifact, snapshot map and entrypoint bytes;
 4. policy-pinned Cosign verification of exact GitHub OIDC workflow/ref/commit;
-5. Rekor transparency verification and a matching independently pinned 2-of-2 TUF roster.
+5. Rekor transparency verification and a two-authority roster published by an externally pinned 1-of-1 TUF custodian.
 
 v35 gives the two manifest representations distinct, closed identities instead
 of overloading one field. `manifest_sha256` and
@@ -34,9 +34,10 @@ until real independent operators freeze them. No local fallback exists.
 
 `attestation_record.py` rejects recomputed but invalid manifests, null authorization, rollback/equal checkpoints, empty/same-custodian services, malformed receipts and failed execution. `promotion_gate.py` is the sole promotion entrypoint and requires Sigstore plus the matching TUF roster.
 `tuf_roster.py` additionally verifies digest-pinned canonical TUF root **and
-targets** metadata with exact 2-of-2 Ed25519 root/targets roles and live
+targets** metadata with exact 1-of-1 Ed25519 root/targets roles and live
 expirations, then validates
-the exact roster target and two distinct custodian labels and authority keys.
+the exact roster target containing two distinct result authorities. The TUF
+publication custodian is not the result-authorization threshold.
 It does not generate keys or signatures. `tuf-root.template.json` and
 `authority-roster.template.json` are non-authoritative hand-off templates.
 
@@ -66,9 +67,9 @@ with internally consistent hashes, is therefore insufficient.
 
 ## Operator order
 
-1. Two separate administrative organizations each generate and retain one
-   Ed25519 TUF key; exchange public keys only.
-2. They review the roster, create `targets.json`, and each sign the canonical
+1. One designated publication custodian generates and retains one Ed25519 TUF key and
+   publishes only its public key.
+2. That custodian reviews the two-authority roster, creates `targets.json`, and signs the canonical
    root and targets `signed` objects. Publish root/targets/roster to storage the
    builder cannot rewrite; independently anchor both metadata digests and their
    generation. A monotonic external clock/anchor remains mandatory because a
@@ -78,18 +79,20 @@ with internally consistent hashes, is therefore insufficient.
 4. Run the OIDC workflow, retrieve the record and Sigstore bundle by immutable
    artifact/run identity, publish the canonical result policy externally, and
    regenerate the verifier with the exact policy and TUF root digests.
-5. A fresh hostile reviewer executes whole-root replacement, one-signature,
+5. A fresh hostile reviewer executes whole-root replacement, missing-signature,
    rollback, split-view, replay, concurrency and crash/recovery controls.
 
-Using two accounts, keys, VMs or services under this same desktop
-administrator does not satisfy steps 1-2. The checked-in positive TUF test is
-only a cryptographic fixture and makes no custodian-independence claim.
+This requested 1-of-1 TUF publication policy is an explicit security downgrade:
+compromise or loss of the sole publication key can replace or halt roster
+publication. It does not reduce the separately enforced 2-of-2 result
+authorization or the two checkpoint-service identities. The checked-in
+positive TUF test is only a cryptographic fixture.
 
 ## Remaining fail-closed state
 
-The inherited authority roster, two checkpoint custodians, nonce ledger and
+The single TUF publication custodian, two result authorities, two checkpoint services, nonce ledger and
 monotonic anchor remain `UNPROVISIONED_*`. The same Windows administrator
-cannot legitimately instantiate those independent authorities. Consequently
+cannot legitimately instantiate the independent checkpoint services. Consequently
 this candidate is **not a PASS**, does not authorize promotion, and does not
 claim to unblock `WP-GOV-001`. It provides a reviewable implementation and
 operator hand-off for one blocker without fabricating external independence.
